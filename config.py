@@ -4,7 +4,7 @@ WIFI_PASSWORD = 'SIfar.5858'
 
 # WebSocket 服务器配置
 
-SERVER_HOST = '18.166.245.229'
+SERVER_HOST = 'x.x.x.x'
 SERVER_PORT = 6789
 
 # 其他全局配置
