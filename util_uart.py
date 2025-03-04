@@ -1,6 +1,7 @@
 import time
 from machine import UART, Pin
 import config
+import util_command
 
 uart = UART(2, 115200)
 
@@ -27,6 +28,7 @@ class LogReader:
     def __init__(self, uart_tx, uart_rx):
         self.buffer = b""
         self.callbacks = []
+        self.cmd_manager = util_command.CommandManager()
         initialize_uart(uart_tx, uart_rx)
         
     def add_callback(self, callback):
@@ -80,6 +82,64 @@ class LogReader:
                 print("Attempting to reconnect...")
                 time.sleep(1)
                 continue
+    def write_command(self, command):
+        """
+        向串口写入命令
+        command: 要发送的命令字符串
+        return: True表示发送成功，False表示发送失败
+        """
+        try:
+            if isinstance(command, str):
+                command = command.encode('utf-8')
+            
+            if not command.endswith(b'\n'):
+                command += b'\n'
+                
+            uart.write(command)
+            return True
+        except Exception as e:
+            print("串口写入错误:", e)
+            return False
+            
+    def write_command_with_response(self, command, timeout=1.0):
+        """
+        发送命令并等待响应
+        command: 要发送的命令
+        timeout: 等待响应的超时时间（秒）
+        return: 返回收到的响应，超时或错误返回None
+        """
+        if not self.write_command(command):
+            return None
+            
+        start_time = time.time()
+        response = b""
+        
+        while (time.time() - start_time) < timeout:
+            if uart.any():
+                data = uart.read()
+                if data:
+                    response += data
+                    if b'\n' in response:  # 收到完整行
+                        try:
+                            return response.decode('utf-8').strip()
+                        except UnicodeError:
+                            return response.decode('iso-8859-1').strip()
+            time.sleep(0.01)
+            
+        return None
+            
+    def execute_command(self, command_key, timeout=1.0):
+        """执行指令"""
+        command = self.cmd_manager.get_command(command_key)
+        if not command:
+            print(f"未知指令: {command_key}")
+            return None
+        print(f"执行指令: {command_key}")
+        return self.write_command_with_response(command, timeout)
+        
+    def update_commands(self, new_commands):
+        """更新指令集"""
+        self.cmd_manager.update_from_server(new_commands)
 
 # 使用示例
 def print_message(message):
@@ -95,10 +155,11 @@ def save_to_file(message):
 def start_log_reader():
     log_reader = LogReader(config.UART_TX, config.UART_RX)
     # 添加回调函数
-    log_reader.add_callback(print_message)
+    #log_reader.add_callback(print_message)
     #log_reader.add_callback(save_to_file)
     # 开始读取日志
-    log_reader.read_log()
+    #log_reader.read_log()
+    print(log_reader.execute_command('help'))
 
 if __name__ == '__main__':
     start_log_reader()
